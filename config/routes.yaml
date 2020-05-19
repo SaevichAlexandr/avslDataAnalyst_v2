@@ -1,3 +1,7 @@
 #index:
 #    path: /
 #    controller: App\Controller\DefaultController::index
+GatherData:
+  path:       /run/gather
+  controller: App\Controller\DataCollectorController::gatherData
+  methods:    GET
