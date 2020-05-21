@@ -11,72 +11,83 @@ use Symfony\Component\Routing\Annotation\Route;
 use Facebook\WebDriver\Remote\DesiredCapabilities;
 use Facebook\WebDriver\Remote\RemoteWebDriver;
 use Facebook\WebDriver\Remote\RemoteWebElement;
+use App\Entity\SearchParams;
+use App\Entity\RawData;
 use Exception;
 
 class DataCollectorController extends AbstractController
 {
-    /**
-     * @throws \Facebook\WebDriver\Exception\NoSuchElementException
-     * @throws \Facebook\WebDriver\Exception\TimeoutException
-     */
-    public function gatherData()
+    // starting selenium server
+    // java -Dwebdriver.gecko.driver="geckodriver.exe" -jar selenium-server-standalone-3.141.59.jar
+    // This is where Selenium server 2/3 listens by default. For Selenium 4, Chromedriver or Geckodriver, use http://localhost:4444/
+    // for geckodriver on selenium server
+    //$host = 'http://localhost:4444/wd/hub';
+    // for clear geckodriver
+    //$host = 'http://localhost:4444';
+    // for clear chromedriver
+    //$host = 'http://localhost:9515';
+
+    public function gatherQueueOrganizer()
+    {
+        $response = new Response();
+        $response->headers->set('Content-type', 'application/json');
+
+        $repository = $this->getDoctrine()->getRepository(SearchParams::class);
+        $searchParamsList = $repository->findBy(['isChecked' => false]);
+
+        if($searchParamsList) {
+            $completeList = [];
+            foreach ($searchParamsList as $searchParams) {
+                set_time_limit(60 * $searchParams->getShowMoreClicks());
+                $timeToComplete = $this->gatherData($searchParams);
+                $completeList[] = ['searchParamsId' => $searchParams->getId(), 'timeToComplete' => $timeToComplete];
+            }
+            return $response->setContent(json_encode($completeList));
+        }
+        else {
+            return $response->setContent('There are no unchecked searchParams');
+        }
+    }
+
+
+    public function gatherData(SearchParams $searchParams)
     {
         $time_pre = microtime(true);
-        // starting selenium server
-        // java -Dwebdriver.gecko.driver="geckodriver.exe" -jar selenium-server-standalone-3.141.59.jar
-        // This is where Selenium server 2/3 listens by default. For Selenium 4, Chromedriver or Geckodriver, use http://localhost:4444/
-        // for geckodriver on selenium server
-        $host = 'http://localhost:4444/wd/hub';
-        // for clear geckodriver
-        //$host = 'http://localhost:4444';
-        // for clear chromedriver
-        //$host = 'http://localhost:9515';
 
+        $host = 'http://localhost:4444/wd/hub';
         $capabilities = DesiredCapabilities::firefox();
         // включение "безголового" режима
         $capabilities->setCapability('moz:firefoxOptions', ['args' => ['-headless']]);
-
         $driver = RemoteWebDriver::create($host, $capabilities);
-
-        $departurePoint = 'AER';
-        $arrivalPoint = 'MMK';
-        $toDepartureDay = '05';
-        $toDepartureMonth = '06';
-        $fromDepartureDay = null;
-        $fromDepartureMonth = null;
-        $reservationClass = null;
-        $adults = 1;
-        $children = 1;
-        $infants = 1;
 
         // TODO: хорошая идея сохранять сырые данные, а потом уже их обрабатывать. Таким образом не будет задержки у парсера страницы.
 
-        $continueButtonClicks = 10;
+        $continueButtonClicks = $searchParams->getShowMoreClicks();
 
         $driver->get('https://www.aviasales.ru/search/'.
-            $departurePoint.
-            $toDepartureDay.
-            $toDepartureMonth.
-            $arrivalPoint.
-            $fromDepartureDay.
-            $fromDepartureMonth.
-            $reservationClass.
-            $adults.
-            $children.
-            $infants.
+            $searchParams->getDeparturePoint().
+            $searchParams->getToDepartureDay().
+            $searchParams->getToDepartureMonth().
+            $searchParams->getArrivalPoint().
+            $searchParams->getFromDepartureDay().
+            $searchParams->getFromDepartureMonth().
+            $searchParams->getReservationClass().
+            $searchParams->getAdults().
+            $searchParams->getChildren().
+            $searchParams->getInfants().
             '?back=true'
         );
 
         $driver->findElement(WebDriverBy::className('theme-switcher'))->click();
 
         $driver->wait()->until(WebDriverExpectedCondition::not(WebDriverExpectedCondition::titleIs(
-            $toDepartureDay.
+            $searchParams->getToDepartureDay().
             '.'.
-            $toDepartureMonth.
+            $searchParams->getToDepartureMonth().
             ', '.
-            $departurePoint.
+            $searchParams->getDeparturePoint().
             ' → '.
-            $arrivalPoint
+            $searchParams->getArrivalPoint()
         )));
 
         $showMoreButton = $driver->findElement(WebDriverBy::cssSelector('div.show-more-products > button'));
@@ -101,28 +112,43 @@ class DataCollectorController extends AbstractController
 
         // почему-то через этот класс у div всё работает
         $listElements = $driver->findElements(WebDriverBy::cssSelector('div.fade-enter-done'));
-        echo 'listElements_third = ';
-        var_dump(count($listElements));
 
         foreach ($listElements as $element)
         {
             $element->click();
         }
 
-        // TODO: стоит подумать, возможно стоит брать данные по кускам (отдельно цены, отдельно инфа о рейсе)
         $dataArray = $driver->findElements(WebDriverBy::className('ticket-desktop'));
+
+        $entityManager = $this->getDoctrine()->getManager();
 
         for ($i = 1; $i < count($dataArray); $i++)
         {
-            echo $i.".".$dataArray[$i]->getText();
-            echo '<br><br>';
+            $rawData = new RawData();
+            try {
+                $akassaLink = $dataArray[$i]->findElement(WebDriverBy::partialLinkText('Aviakassa'))->getAttribute('href');
+            }
+            catch (Exception $ex) {
+                continue;
+            }
+//            echo '<br>'.$akassaLink;
+            $rawData->setOfferText($dataArray[$i]->getText());
+            $rawData->setSearchParams($searchParams);
+
+            $entityManager->persist($rawData);
+            $entityManager->flush();
         }
+
+//        $driver->quit();
 
         $time_post = microtime(true);
 
-        echo 'Execution time = '.($time_post - $time_pre);
+        // указываем что данная запись уже проверенна
+        $searchParams->setIsChecked(true);
+        $entityManager->persist($searchParams);
+        $entityManager->flush();
 
-        $driver->quit();
+        return ($time_post - $time_pre);
     }
 
     /**

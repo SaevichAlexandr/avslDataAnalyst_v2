@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\SearchParamsRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
@@ -81,6 +83,16 @@ class SearchParams
      * @ORM\Column(type="boolean")
      */
     private $isChecked = false;
+
+    /**
+     * @ORM\OneToMany(targetEntity=RawData::class, mappedBy="searchParamsId", orphanRemoval=true)
+     */
+    private $rawData;
+
+    public function __construct()
+    {
+        $this->rawData = new ArrayCollection();
+    }
 
     public function getId(): ?int
     {
@@ -241,5 +253,36 @@ class SearchParams
     public function getIsChecked(): ?bool
     {
         return $this->isChecked;
+    }
+
+    /**
+     * @return Collection|RawData[]
+     */
+    public function getRawData(): Collection
+    {
+        return $this->rawData;
+    }
+
+    public function addRawData(RawData $rawData): self
+    {
+        if (!$this->rawData->contains($rawData)) {
+            $this->rawData[] = $rawData;
+            $rawData->setSearchParamsId($this);
+        }
+
+        return $this;
+    }
+
+    public function removeRawData(RawData $rawData): self
+    {
+        if ($this->rawData->contains($rawData)) {
+            $this->rawData->removeElement($rawData);
+            // set the owning side to null (unless already changed)
+            if ($rawData->getSearchParamsId() === $this) {
+                $rawData->setSearchParamsId(null);
+            }
+        }
+
+        return $this;
     }
 }

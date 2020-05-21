@@ -3,7 +3,17 @@
 #    controller: App\Controller\DefaultController::index
 GatherData:
   path:       /gather/run
-  controller: App\Controller\DataCollectorController::gatherData
+  controller: App\Controller\DataCollectorController::gatherQueueOrganizer
+  methods:    GET
+
+GetSearchParams:
+  path:       /search_params/get/{id}
+  controller: App\Controller\SearchParamsController::getSearchParams
+  methods:    GET
+
+GetSearchParamsAll:
+  path:       /search_params/get_all
+  controller: App\Controller\SearchParamsController::getAll
   methods:    GET
 
 CreateSearchParams:

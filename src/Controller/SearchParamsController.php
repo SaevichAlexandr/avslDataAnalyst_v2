@@ -14,6 +14,84 @@ class SearchParamsController extends AbstractController
     private $maxPassengersNumber = 9;
     private $datetimeFormat = 'Y-m-d H:i:s';
 
+    public function getSearchParams($id)
+    {
+        $response = new Response();
+        $response->headers->set('Content-type', 'application/json');
+        $repository = $this->getDoctrine()->getRepository(SearchParams::class);
+        $searchParams = $repository->find($id);
+
+        if($searchParams) {
+            $response->setContent(json_encode(
+                [
+                    'id' => $searchParams->getId(),
+                    'departurePoint' => $searchParams->getDeparturePoint(),
+                    'arrivalPoint' => $searchParams->getArrivalPoint(),
+                    'toDepartureDay' => $searchParams->getToDepartureDay(),
+                    'toDepartureMonth' => $searchParams->getToDepartureMonth(),
+                    'fromDepartureDay' => $searchParams->getFromDepartureDay(),
+                    'fromDepartureMonth' => $searchParams->getFromDepartureMonth(),
+                    'reservationClass' => $searchParams->getReservationClass(),
+                    'adults' => $searchParams->getAdults(),
+                    'children' => $searchParams->getChildren(),
+                    'infants' => $searchParams->getInfants(),
+                    'showMoreClicks' => $searchParams->getShowMoreClicks(),
+                    'createdAt' => $searchParams->getCreatedAt(),
+                    'isChecked' => $searchParams->getIsChecked(),
+                ]
+            ));
+
+            return $response;
+        }
+        else
+        {
+            $response->setContent(json_encode('Element not found'));
+            return $response;
+        }
+    }
+
+    public function getAll()
+    {
+        $repository = $this->getDoctrine()->getRepository(SearchParams::class);
+        $searchParamsList = $repository->findAll();
+        $response = new Response();
+        $response->headers->set('Content-type', 'application/json');
+
+        if($searchParamsList)
+        {
+            $items = [];
+            foreach ($searchParamsList as $searchParams)
+            {
+                $item = [
+                    'id' => $searchParams->getId(),
+                    'departurePoint' => $searchParams->getDeparturePoint(),
+                    'arrivalPoint' => $searchParams->getArrivalPoint(),
+                    'toDepartureDay' => $searchParams->getToDepartureDay(),
+                    'toDepartureMonth' => $searchParams->getToDepartureMonth(),
+                    'fromDepartureDay' => $searchParams->getFromDepartureDay(),
+                    'fromDepartureMonth' => $searchParams->getFromDepartureMonth(),
+                    'reservationClass' => $searchParams->getReservationClass(),
+                    'adults' => $searchParams->getAdults(),
+                    'children' => $searchParams->getChildren(),
+                    'infants' => $searchParams->getInfants(),
+                    'showMoreClicks' => $searchParams->getShowMoreClicks(),
+                    'createdAt' => $searchParams->getCreatedAt(),
+                    'isChecked' => $searchParams->getIsChecked(),
+                ];
+                $items[] = $item;
+            }
+
+            $response->setContent(json_encode($items));
+
+            return $response;
+        }
+        else
+        {
+            $response->setContent(json_encode('Elements not found'));
+            return $response;
+        }
+    }
+
     /**
      * Запись параметров поискового запроса для нахождения данных по рейсам
      *
@@ -30,7 +108,7 @@ class SearchParamsController extends AbstractController
 
         if($validationResponse == 200) {
             $searchParams = new SearchParams();
-            $response->setContent(json_encode(['id' => $this->setData($searchParams, $reqBody)->getId()]));
+            $response->setContent(json_encode(['id' => $this->setData($searchParams, $reqBody, true)->getId()]));
             return $response;
         }
         // TODO: пожалуй нужно добавить класс с описаниями ошибок потом
@@ -61,7 +139,7 @@ class SearchParamsController extends AbstractController
             $validationResponse = $this->isValidReqBody($reqBody);
 
             if($validationResponse == 200) {
-                $searchParams = $this->setData($searchParams, $reqBody);
+                $searchParams = $this->setData($searchParams, $reqBody, false);
                 $response->setContent(json_encode([
                     'id' => $searchParams->getId(),
                     'departurePoint' => $searchParams->getDeparturePoint(),
@@ -92,13 +170,20 @@ class SearchParamsController extends AbstractController
 
     }
 
-    public function delete(int $id)
+    /**
+     * Удаление записи из таблицы
+     *
+     * @param int $id
+     * @return Response
+     */
+    public function delete(int $id): Response
     {
         $response = new Response();
         $response->headers->set('Content-type', 'application/json');
 
         $repository = $this->getDoctrine()->getRepository(SearchParams::class);
         $searchParams = $repository->find($id);
+        // проверка наличия записи и того что по ней не было работы
         if($searchParams && !$searchParams->getIsChecked())
         {
             $entityManager = $this->getDoctrine()->getManager();
@@ -118,59 +203,12 @@ class SearchParamsController extends AbstractController
     /**
      * Функция записи данных через ORM
      *
+     * @param SearchParams $searchParams
      * @param array $reqBody
-     * @param string $addType
-     * @param Response $response
-     * @return Response
+     * @param bool $createAction
+     * @return SearchParams
      */
-    private function writeData(array $reqBody, string $addType, Response $response): Response
-    {
-        $searchParams = new SearchParams();
-//        $searchParams->setDeparturePoint($reqBody['departurePoint']);
-//        $searchParams->setArrivalPoint($reqBody['arrivalPoint']);
-//        $searchParams->setToDepartureDay($reqBody['toDepartureDay']);
-//        $searchParams->setToDepartureMonth($reqBody['toDepartureMonth']);
-//        $searchParams->setFromDepartureDay($reqBody['fromDepartureDay']);
-//        $searchParams->setFromDepartureMonth($reqBody['fromDepartureMonth']);
-//        $searchParams->setReservationClass($reqBody['reservationClass']);
-//        $searchParams->setAdults($reqBody['adults']);
-//        $searchParams->setChildren($reqBody['children']);
-//        $searchParams->setInfants($reqBody['infants']);
-//        $searchParams->setShowMoreClicks($reqBody['showMoreClicks']);
-//        $searchParams->setCreatedAt(DateTime::createFromFormat($this->datetimeFormat, date('Y-m-d H:i:s')));
-//
-//        $entityManager = $this->getDoctrine()->getManager();
-//        $entityManager->persist($searchParams);
-//        $entityManager->flush();
-//
-//        switch ($addType) {
-//            case 'create':
-//                $response->setContent(json_encode(['id' => $searchParams->getId()]));
-//                break;
-//            case 'update':
-//                $response->setContent(json_encode([
-//                    'id' => $searchParams->getId(),
-//                    'departurePoint' => $searchParams->getDeparturePoint(),
-//                    'arrivalPoint' => $searchParams->getArrivalPoint(),
-//                    'toDepartureDay' => $searchParams->getToDepartureDay(),
-//                    'toDepartureMonth' => $searchParams->getToDepartureMonth(),
-//                    'fromDepartureDay' => $searchParams->getFromDepartureDay(),
-//                    'fromDepartureMonth' => $searchParams->getFromDepartureMonth(),
-//                    'reservationClass' => $searchParams->getReservationClass(),
-//                    'adults' => $searchParams->getAdults(),
-//                    'children' => $searchParams->getChildren(),
-//                    'infants' => $searchParams->getInfants(),
-//                    'showMoreClicks' => $searchParams->getShowMoreClicks(),
-//                    'createdAt' => $searchParams->getCreatedAt(),
-//                    'isChecked' => $searchParams->getIsChecked(),
-//                ]));
-//                break;
-//        }
-
-        return $response;
-    }
-
-    private function setData(SearchParams $searchParams, array $reqBody): SearchParams
+    private function setData(SearchParams $searchParams, array $reqBody, bool $createAction): SearchParams
     {
         $searchParams->setDeparturePoint($reqBody['departurePoint']);
         $searchParams->setArrivalPoint($reqBody['arrivalPoint']);
@@ -183,7 +221,9 @@ class SearchParamsController extends AbstractController
         $searchParams->setChildren($reqBody['children']);
         $searchParams->setInfants($reqBody['infants']);
         $searchParams->setShowMoreClicks($reqBody['showMoreClicks']);
-        $searchParams->setCreatedAt(DateTime::createFromFormat($this->datetimeFormat, date('Y-m-d H:i:s')));
+        if($createAction) {
+            $searchParams->setCreatedAt(DateTime::createFromFormat($this->datetimeFormat, date('Y-m-d H:i:s')));
+        }
 
         $entityManager = $this->getDoctrine()->getManager();
         $entityManager->persist($searchParams);
@@ -200,7 +240,6 @@ class SearchParamsController extends AbstractController
      */
     private function isValidReqBody(array $reqBody): int
     {
-        // TODO: нужно сделать проверку на корректность ввода числа детей и инфантов
         if(
             isset($reqBody['departurePoint']) &&
             isset($reqBody['arrivalPoint']) &&
@@ -236,12 +275,12 @@ class SearchParamsController extends AbstractController
                     ) {
                         return 200;
                     }
-                    return 404;
+                    return 504;
                 }
-                return 403;
+                return 503;
             }
-            return 402;
+            return 502;
         }
-        return 401;
+        return 501;
     }
 }
