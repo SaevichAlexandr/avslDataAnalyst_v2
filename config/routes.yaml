@@ -2,6 +2,25 @@
 #    path: /
 #    controller: App\Controller\DefaultController::index
 GatherData:
-  path:       /run/gather
+  path:       /gather/run
   controller: App\Controller\DataCollectorController::gatherData
   methods:    GET
+
+CreateSearchParams:
+  path:       /search_params/create
+  controller: App\Controller\SearchParamsController::create
+  methods:    POST
+
+UpdateSearchParams:
+  path:       /search_params/update/{id}
+  controller: App\Controller\SearchParamsController::update
+  methods:    POST
+  requirements:
+    id: '\d+'
+
+DeleteSearchParams:
+  path:       /search_params/delete/{id}
+  controller: App\Controller\SearchParamsController::delete
+  methods:    GET
+  requirements:
+    id: '\d+'

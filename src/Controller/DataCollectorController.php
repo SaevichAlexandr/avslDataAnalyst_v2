@@ -4,6 +4,8 @@ namespace App\Controller;
 
 use Facebook\WebDriver\WebDriverBy;
 use Facebook\WebDriver\WebDriverExpectedCondition;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
 use Facebook\WebDriver\Remote\DesiredCapabilities;
@@ -38,18 +40,11 @@ class DataCollectorController extends AbstractController
 
         $departurePoint = 'AER';
         $arrivalPoint = 'MMK';
-        $firstDepartureDay = '05';
-        $firstDepartureMonth = '06';
-        $secondDepartureDay = null;
-        $secondDepartureMonth = null;
-        /**
-         * Возможные значения для $reservationClass:
-         * '' - эконом;
-         * 'w' - комфорт;
-         * 'c' - бизнес;
-         * 'f' - первый класс.
-         */
-        $reservationClass = '';
+        $toDepartureDay = '05';
+        $toDepartureMonth = '06';
+        $fromDepartureDay = null;
+        $fromDepartureMonth = null;
+        $reservationClass = null;
         $adults = 1;
         $children = 1;
         $infants = 1;
@@ -60,11 +55,11 @@ class DataCollectorController extends AbstractController
 
         $driver->get('https://www.aviasales.ru/search/'.
             $departurePoint.
-            $firstDepartureDay.
-            $firstDepartureMonth.
+            $toDepartureDay.
+            $toDepartureMonth.
             $arrivalPoint.
-            $secondDepartureDay.
-            $secondDepartureMonth.
+            $fromDepartureDay.
+            $fromDepartureMonth.
             $reservationClass.
             $adults.
             $children.
@@ -75,9 +70,9 @@ class DataCollectorController extends AbstractController
         $driver->findElement(WebDriverBy::className('theme-switcher'))->click();
 
         $driver->wait()->until(WebDriverExpectedCondition::not(WebDriverExpectedCondition::titleIs(
-            $firstDepartureDay.
+            $toDepartureDay.
             '.'.
-            $firstDepartureMonth.
+            $toDepartureMonth.
             ', '.
             $departurePoint.
             ' → '.
@@ -138,7 +133,7 @@ class DataCollectorController extends AbstractController
      * @param RemoteWebElement $driverItem
      * @return int
      */
-    public function showMoreResults(int $continueButtonClicks, RemoteWebElement $driverItem): int
+    private function showMoreResults(int $continueButtonClicks, RemoteWebElement $driverItem): int
     {
         for ($i = 0; $i < $continueButtonClicks; $i++)
         {
@@ -146,7 +141,6 @@ class DataCollectorController extends AbstractController
                 $driverItem->click();
             }
             catch (Exception $ex) {
-                echo 'No more show-more buttons!';
                 return --$i;
             }
         }
