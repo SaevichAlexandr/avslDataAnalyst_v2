@@ -13,6 +13,7 @@ use Facebook\WebDriver\Remote\RemoteWebDriver;
 use Facebook\WebDriver\Remote\RemoteWebElement;
 use App\Entity\SearchParams;
 use App\Entity\RawData;
+use DateTime;
 use Exception;
 
 class DataCollectorController extends AbstractController
@@ -26,6 +27,8 @@ class DataCollectorController extends AbstractController
     //$host = 'http://localhost:4444';
     // for clear chromedriver
     //$host = 'http://localhost:9515';
+
+    private $datetimeFormat = 'Y-m-d H:i:s';
 
     public function gatherQueueOrganizer()
     {
@@ -59,8 +62,6 @@ class DataCollectorController extends AbstractController
         // включение "безголового" режима
         $capabilities->setCapability('moz:firefoxOptions', ['args' => ['-headless']]);
         $driver = RemoteWebDriver::create($host, $capabilities);
-
-        // TODO: хорошая идея сохранять сырые данные, а потом уже их обрабатывать. Таким образом не будет задержки у парсера страницы.
 
         $continueButtonClicks = $searchParams->getShowMoreClicks();
 
@@ -131,15 +132,16 @@ class DataCollectorController extends AbstractController
             catch (Exception $ex) {
                 continue;
             }
-//            echo '<br>'.$akassaLink;
-            $rawData->setOfferText($dataArray[$i]->getText());
+            // никто ничего не видит
+            $rawData->setOfferText($dataArray[$i]->getText().$akassaLink);
             $rawData->setSearchParams($searchParams);
+            $rawData->setCreatedAt(DateTime::createFromFormat($this->datetimeFormat, date('Y-m-d H:i:s')));
 
             $entityManager->persist($rawData);
             $entityManager->flush();
         }
 
-//        $driver->quit();
+        $driver->quit();
 
         $time_post = microtime(true);
 

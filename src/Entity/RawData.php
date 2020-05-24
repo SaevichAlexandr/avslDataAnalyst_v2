@@ -33,6 +33,15 @@ class RawData
      */
     private $isParsed = false;
 
+    /**
+     * @ORM\OneToOne(targetEntity=OfferData::class, mappedBy="rawData", cascade={"persist", "remove"})
+     */
+    private $offerData;
+
+    /**
+     * @ORM\Column(type="datetime")
+     */
+    private $createdAt;
 
     public function getId(): ?int
     {
@@ -73,5 +82,34 @@ class RawData
         $this->isParsed = $isParsed;
 
         return $this;
+    }
+
+    public function getOfferData(): ?OfferData
+    {
+        return $this->offerData;
+    }
+
+    public function setOfferData(OfferData $offerData): self
+    {
+        $this->offerData = $offerData;
+
+        // set the owning side of the relation if necessary
+        if ($offerData->getRawData() !== $this) {
+            $offerData->setRawData($this);
+        }
+
+        return $this;
+    }
+
+    public function setCreatedAt(?\DateTimeInterface $createdAt): self
+    {
+        $this->createdAt = $createdAt;
+
+        return $this;
+    }
+
+    public function getCreatedAt(): ?\DateTimeInterface
+    {
+        return $this->createdAt;
     }
 }

@@ -200,6 +200,8 @@ class SearchParamsController extends AbstractController
         }
     }
 
+    // TODO: нужно реализовать проверку наличия рейса, и в случае наличия брать его id из бд
+
     /**
      * Функция записи данных через ORM
      *

@@ -75,6 +75,8 @@ class SearchParams
     private $showMoreClicks;
 
     /**
+     * @var
+     *
      * @ORM\Column(type="datetime")
      */
     private $createdAt;
