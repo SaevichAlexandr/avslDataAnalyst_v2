@@ -65,8 +65,9 @@ class OfferData
      */
     private $arrivalDatetime;
 
+    // хотел переделать в int, но pg мне не дал, хоть колонка и не id, так что казалось бы...
     /**
-     * @ORM\Column(type="integer")
+     * @ORM\Column(type="string", length=15, nullable=true)
      */
     private $transferTime;
 
@@ -204,12 +205,12 @@ class OfferData
         return $this;
     }
 
-    public function getTransferTime(): ?int
+    public function getTransferTime(): ?string
     {
         return $this->transferTime;
     }
 
-    public function setTransferTime(?int $transferTime): self
+    public function setTransferTime(?string $transferTime): self
     {
         $this->transferTime = $transferTime;
 

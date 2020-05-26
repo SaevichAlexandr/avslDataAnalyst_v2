@@ -53,48 +53,83 @@ class DataParserController extends AbstractController
      */
     private function parseData(RawData $rawData): int
     {
-        // ебатория, но работает
-//        $firstResult = explode('
-//', $rawData->getOfferText());
-        // чуть получше, но тоже работает
+        // внесение данных в таблицу OfferData
         $splitResult = preg_split('/\r\n|\r|\n/', $rawData->getOfferText());
+        echo 'ID = '.$rawData->getId();
+//        $offerData = new OfferData();
+//        $offerData->setRawData($rawData);
 
-//        $i = 0;
-//        foreach ($splitResult as $item) {
-//            echo ++$i.'||'.$item.'<br>';
-//        }
+        $this->parseOfferInfo($splitResult);
+
+
         // TODO: весь сбор инфы по OfferData отсюда нужно перенести в функцию parseOfferInfo
-        $offerData = new OfferData();
-        $offerData->setRawData($rawData);
-        switch ($splitResult[0]) {
-            case 'Нет багажа':
-//                $offerData->setBaggage('0PC');
-                echo '0PC<br>';
-                break;
-            case 'С багажом':
-//                $offerData->setBaggage('1PC');
-                echo '1PC<br>';
-                break;
-        }
+
+
+        return 200;
+    }
+
+    private function parseOfferInfo(array $splitResult)
+    {
         try {
+            $baggage = $this->parseBaggage($splitResult[0]);
+            echo 'Baggage = ' . $baggage . '<br>';
             $buyForIndex = $this->buyFor($splitResult);
+            echo 'BuyForIndex = ' . $buyForIndex . '<br>';
+            $buttonPrice = $this->parseButtonPrice($splitResult, $buyForIndex);
+            echo 'ButtonPrice = ' . $buttonPrice . '<br>';
+            $suppliersPrices = $this->parseSuppliersPrices($splitResult, $buyForIndex, $buttonPrice);
+            var_dump($suppliersPrices);
+            $akassaPrice = $this->findAkassaPrice($suppliersPrices);
+            echo 'AkassaPrice = '.$akassaPrice.'<br>';
+            $akassaHref = $splitResult[(count($splitResult) - 1)];
+            echo 'AkassaHref = ' . $akassaHref . '<br>';
+
+            for ($i = 0; $i < count($splitResult); $i++) {
+                if (preg_match('([0-9][0-9]:[0-9][0-9])', $splitResult[$i])) {
+                    $currentElement = $i;
+                    $departurePoint = $splitResult[($currentElement + 4)];
+                    echo 'DeparturePoint = '.$departurePoint.'<br>';
+                    $arrivalPoint = $splitResult[($currentElement + 5)];
+                    echo 'ArrivalPoint = '.$arrivalPoint.'<br>';
+                    // пересадки может и не быть, йобана
+                    $transferTime = $this->parseTransferTime($splitResult[($currentElement + 3)]);
+                    echo 'TransferTime = '.$transferTime.'<br>';
+
+                    $departureTime = $splitResult[$currentElement];
+                    $departureDate = $splitResult[($currentElement + 2)];
+                    $arrivalTime = $splitResult[($currentElement + 6)];
+                    $arrivalDate = $splitResult[($currentElement + 8)];
+
+                    $departureDatetime = $this->parseOfferDate($departureDate, $departureTime);
+                    var_dump($departureDatetime);
+                    $arrivalDatetime = $this->parseOfferDate($arrivalDate, $arrivalTime);
+                    var_dump($arrivalDatetime);
+                    $createdAt = DateTime::createFromFormat($this->datetimeFormat, date('Y-m-d H:i:s'));
+                    echo '=======================================================================<br>';
+                    break;
+                }
+            }
         }
         catch (Exception $ex) {
             throw $ex;
         }
+    }
 
-        $buttonPrice = $this->parseButtonPrice($splitResult, $buyForIndex);
-        echo $buttonPrice.'<br>';
-
-        $suppliersPrices = $this->parseSuppliersPrices($splitResult, $buyForIndex, $buttonPrice);
-        // здесь нужн проверка, так как метод может вернуть пустой массив если всё пошло не так
-        if($suppliersPrices) {
-            var_dump($suppliersPrices);
-        } else {
-            echo 'При парсинге цен произошла ошибка и он был завершен некорректно';
+    /**
+     * Ищет среди всех цен цену предлагаемую Авиакассой
+     *
+     * @param array $suppliersPrices
+     * @return mixed
+     * @throws Exception
+     */
+    private function findAkassaPrice(array $suppliersPrices)
+    {
+        foreach ($suppliersPrices as $suppliersPrice) {
+            if ($suppliersPrice['supplierName'] == 'Aviakassa') {
+                return $suppliersPrice['supplierPrice'];
+            }
         }
-
-        return 200;
+        throw new Exception('Не удалось найти цену от Авиакассы!');
     }
 
     /**
@@ -141,13 +176,22 @@ class DataParserController extends AbstractController
      * @param array $splitResult
      * @param int $buyForIndex
      * @param float $buttonPrice
+     *
      * @return array
+     *
+     * @throws Exception
      */
     private function parseSuppliersPrices(array $splitResult, int $buyForIndex, float $buttonPrice): array
     {
         $suppliersPrices = [];
+
+        $buttonSupplierName = str_replace('на ', '', $splitResult[($buyForIndex + 2)]);
+        $suppliersPrices[] = ['supplierName' => $buttonSupplierName, 'supplierPrice' => $buttonPrice];
+
         for ($i = ($buyForIndex + 3); $i < count($splitResult); $i++) {
-            if (!preg_match('([0-9][0-9]:[0-9][0-9])', $splitResult[$i])) {
+            if (!preg_match('([0-9][0-9]:[0-9][0-9])', $splitResult[$i]) &&
+                $splitResult[$i] != 'ЧАРТЕР' &&
+                $splitResult[$i] != 'ЛОУКОСТ') {
                 $supplierName = $splitResult[$i];
                 $supplierPrice = explode(' ', $splitResult[++$i]);
                 $supplierPrice = floatval($supplierPrice[0].$supplierPrice[1]);
@@ -157,28 +201,35 @@ class DataParserController extends AbstractController
                 return $suppliersPrices;
             }
         }
-        return $suppliersPrices;
+        throw new Exception('Не удалось получить цены по данному предложению!');
     }
 
-    private function parseOfferInfo(array $splitResult)
+    private function parseBaggage(string $rawBaggage): bool
     {
-        for ($i = 0; $i < count($splitResult); $i++) {
-            if (!preg_match('([0-9][0-9]:[0-9][0-9])', $splitResult[$i])) {
-                $currentElement = $i;
-                $departureTime = $splitResult[$currentElement];
-                $departureDate = $splitResult[($currentElement + 2)];
-                $arrivalTime = $splitResult[($currentElement + 6)];
-                $arrivalDate = $splitResult[($currentElement + 8)];
-                try {
-                    $departureDatetime = $this->parseOfferDate($departureDate, $departureTime);
-                    $arrivalDatetime = $this->parseOfferDate($arrivalDate, $arrivalTime);
-                }
-                catch (Exception $ex) {
-                    throw $ex;
-                }
-
-            }
+        switch ($rawBaggage) {
+            case 'Нет багажа':
+                return '0PC';
+            case 'С багажом':
+                return '1PC';
         }
+        throw new Exception('Невозможно определить наличие багажа!');
+    }
+
+    /**
+     * Перевод времени в пути к количеству минут
+     *
+     * @param string $rawTransferTime
+     * @return string
+     */
+    private function parseTransferTime(string $rawTransferTime): string
+    {
+        $rawTransferTimeArray = preg_split('/ /', $rawTransferTime);
+        $transferHours = intval(str_replace('ч', '', $rawTransferTimeArray[2]));
+        if(count($rawTransferTimeArray) == 4) {
+            $transferMinutes = intval(str_replace('м', '', $rawTransferTimeArray[3]));
+            return strval(($transferHours*60 + $transferMinutes));
+        }
+        return strval(($transferHours*60));
     }
 
     /**
@@ -186,7 +237,9 @@ class DataParserController extends AbstractController
      *
      * @param string $rawDate
      * @param string $rawTime
+     *
      * @return DateTime
+     *
      * @throws Exception
      */
     private function parseOfferDate(string $rawDate, string $rawTime): DateTime
@@ -208,7 +261,9 @@ class DataParserController extends AbstractController
      * Переопределение символьного названия месяца в числовое
      *
      * @param string $rawMonth
+     *
      * @return string
+     *
      * @throws Exception
      */
     private function checkMonth(string $rawMonth): string
