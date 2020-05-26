@@ -53,7 +53,7 @@ class DataCollectorController extends AbstractController
     }
 
 
-    public function gatherData(SearchParams $searchParams)
+    private function gatherData(SearchParams $searchParams)
     {
         $time_pre = microtime(true);
 

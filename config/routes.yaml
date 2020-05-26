@@ -34,3 +34,8 @@ DeleteSearchParams:
   methods:    GET
   requirements:
     id: '\d+'
+
+ParseData:
+  path:       /parse/run
+  controller: App\Controller\DataParserController::parsingQueueOrganizer
+  methods:    GET
