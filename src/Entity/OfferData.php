@@ -66,7 +66,7 @@ class OfferData
     private $arrivalDatetime;
 
     /**
-     * @ORM\Column(type="string", length=15, nullable=true)
+     * @ORM\Column(type="integer")
      */
     private $transferTime;
 
@@ -204,12 +204,12 @@ class OfferData
         return $this;
     }
 
-    public function getTransferTime(): ?string
+    public function getTransferTime(): ?int
     {
         return $this->transferTime;
     }
 
-    public function setTransferTime(?string $transferTime): self
+    public function setTransferTime(?int $transferTime): self
     {
         $this->transferTime = $transferTime;
 

@@ -11,9 +11,12 @@ use App\Entity\RawData;
 use App\Entity\OfferData;
 use DateTime;
 use Exception;
+use App\CustomException\StringNotFoundException;
 
 class DataParserController extends AbstractController
 {
+    private $datetimeFormat = 'Y-m-d H:i:s';
+
     /**
      * Старт парсинга
      *
@@ -46,6 +49,7 @@ class DataParserController extends AbstractController
      *
      * @param RawData $rawData
      * @return int
+     * @throws Exception
      */
     private function parseData(RawData $rawData): int
     {
@@ -59,7 +63,7 @@ class DataParserController extends AbstractController
 //        foreach ($splitResult as $item) {
 //            echo ++$i.'||'.$item.'<br>';
 //        }
-
+        // TODO: весь сбор инфы по OfferData отсюда нужно перенести в функцию parseOfferInfo
         $offerData = new OfferData();
         $offerData->setRawData($rawData);
         switch ($splitResult[0]) {
@@ -72,10 +76,11 @@ class DataParserController extends AbstractController
                 echo '1PC<br>';
                 break;
         }
-        $buyForIndex = $this->buyFor($splitResult);
-
-        if($buyForIndex == -1) {
-            return 501;
+        try {
+            $buyForIndex = $this->buyFor($splitResult);
+        }
+        catch (Exception $ex) {
+            throw $ex;
         }
 
         $buttonPrice = $this->parseButtonPrice($splitResult, $buyForIndex);
@@ -88,8 +93,6 @@ class DataParserController extends AbstractController
         } else {
             echo 'При парсинге цен произошла ошибка и он был завершен некорректно';
         }
-
-
 
         return 200;
     }
@@ -120,6 +123,7 @@ class DataParserController extends AbstractController
      *
      * @param array $splitResult
      * @return int
+     * @throws Exception
      */
     private function buyFor(array $splitResult): int
     {
@@ -128,7 +132,7 @@ class DataParserController extends AbstractController
                 return $i;
             }
         }
-        return -1;
+        throw new Exception('В массиве отсустствует строка \'Купить\'');
     }
 
     /**
@@ -156,8 +160,101 @@ class DataParserController extends AbstractController
         return $suppliersPrices;
     }
 
-    private function parseFlightsInfo()
+    private function parseOfferInfo(array $splitResult)
     {
+        for ($i = 0; $i < count($splitResult); $i++) {
+            if (!preg_match('([0-9][0-9]:[0-9][0-9])', $splitResult[$i])) {
+                $currentElement = $i;
+                $departureTime = $splitResult[$currentElement];
+                $departureDate = $splitResult[($currentElement + 2)];
+                $arrivalTime = $splitResult[($currentElement + 6)];
+                $arrivalDate = $splitResult[($currentElement + 8)];
+                try {
+                    $departureDatetime = $this->parseOfferDate($departureDate, $departureTime);
+                    $arrivalDatetime = $this->parseOfferDate($arrivalDate, $arrivalTime);
+                }
+                catch (Exception $ex) {
+                    throw $ex;
+                }
 
+            }
+        }
     }
+
+    /**
+     * Преобразует дату и время из 2 строк в единый DateTime
+     *
+     * @param string $rawDate
+     * @param string $rawTime
+     * @return DateTime
+     * @throws Exception
+     */
+    private function parseOfferDate(string $rawDate, string $rawTime): DateTime
+    {
+        try {
+            $rawDateArray = preg_split('/ /', $rawDate);
+            $day = $rawDateArray[0];
+            $month = $this->checkMonth($rawDateArray[1]);
+            $year = str_replace(',',  '', $rawDateArray[2]);
+
+            return DateTime::createFromFormat($this->datetimeFormat, $year.'-'.$month.'-'.$day.' '.$rawTime.':00');
+        }
+        catch (Exception $ex) {
+            throw $ex;
+        }
+    }
+
+    /**
+     * Переопределение символьного названия месяца в числовое
+     *
+     * @param string $rawMonth
+     * @return string
+     * @throws Exception
+     */
+    private function checkMonth(string $rawMonth): string
+    {
+        switch ($rawMonth) {
+            case 'янв':
+                return '01';
+            case 'фев':
+                return '02';
+            case 'мар':
+                return '03';
+            case 'апр':
+                return '04';
+            case 'май':
+                return '05';
+            case 'июн':
+                return '06';
+            case 'июл':
+                return '07';
+            case 'авг':
+                return '08';
+            case 'сен':
+                return '09';
+            case 'окт':
+                return '10';
+            case 'ноя':
+                return '11';
+            case 'дек':
+                return '12';
+        }
+        throw new Exception('Не найдена информация о месяце');
+    }
+
+    /**
+     * Метод распарсивает информацию по входящим в предложениям перелётам
+     *
+     * @param array $splitResult
+     * @return array
+     */
+//    private function parseFlightsInfo(array $splitResult): array
+//    {
+//        for ($i = 0; $i < count($splitResult); $i++) {
+//            if (!preg_match('([0-9][0-9]:[0-9][0-9])', $splitResult[$i])) {
+//                $fromTime = $splitResult[$i];
+//
+//            }
+//        }
+//    }
 }
