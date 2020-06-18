@@ -16,11 +16,17 @@ use App\Entity\RawData;
 use DateTime;
 use Exception;
 
+/**
+ * Class DataCollectorController
+ * 
+ * @package App\Controller
+ */
 class DataCollectorController extends AbstractController
 {
     // starting selenium server
     // java -Dwebdriver.gecko.driver="geckodriver.exe" -jar selenium-server-standalone-3.141.59.jar
-    // This is where Selenium server 2/3 listens by default. For Selenium 4, Chromedriver or Geckodriver, use http://localhost:4444/
+    // This is where Selenium server 2/3 listens by default. For Selenium 4,
+    // Chromedriver or Geckodriver, use http://localhost:4444/
     // for geckodriver on selenium server
     //$host = 'http://localhost:4444/wd/hub';
     // for clear geckodriver
@@ -28,8 +34,16 @@ class DataCollectorController extends AbstractController
     // for clear chromedriver
     //$host = 'http://localhost:9515';
 
-    private $datetimeFormat = 'Y-m-d H:i:s';
+    private $_datetimeFormat = 'Y-m-d H:i:s';
 
+    /**
+     * Входной метод в разбор страниц
+     *
+     * @return Response
+     *
+     * @throws \Facebook\WebDriver\Exception\NoSuchElementException
+     * @throws \Facebook\WebDriver\Exception\TimeoutException
+     */
     public function gatherQueueOrganizer()
     {
         $response = new Response();
@@ -38,34 +52,49 @@ class DataCollectorController extends AbstractController
         $repository = $this->getDoctrine()->getRepository(SearchParams::class);
         $searchParamsList = $repository->findBy(['isChecked' => false]);
 
-        if($searchParamsList) {
+        if ($searchParamsList) {
             $completeList = [];
             foreach ($searchParamsList as $searchParams) {
-                set_time_limit(60 * $searchParams->getShowMoreClicks());
-                $timeToComplete = $this->gatherData($searchParams);
-                $completeList[] = ['searchParamsId' => $searchParams->getId(), 'timeToComplete' => $timeToComplete];
+                set_time_limit(100 * $searchParams->getShowMoreClicks());
+                $timeToComplete = $this->_gatherData($searchParams);
+                $completeList[] = [
+                    'searchParamsId' => $searchParams->getId(),
+                    'timeToComplete' => $timeToComplete
+                ];
             }
             return $response->setContent(json_encode($completeList));
-        }
-        else {
+        } else {
             return $response->setContent('There are no unchecked searchParams');
         }
     }
 
-
-    private function gatherData(SearchParams $searchParams)
+    //TODO: надо убрать собственные классы ошибок если не планируется
+    // их обрабатывать
+    /**
+     * Основной метод где происходит сбор данных
+     *
+     * @param SearchParams $searchParams объект $searchParams
+     *
+     * @return float|string
+     *
+     * @throws \Facebook\WebDriver\Exception\NoSuchElementException
+     * @throws \Facebook\WebDriver\Exception\TimeoutException
+     */
+    private function _gatherData(SearchParams $searchParams)
     {
         $time_pre = microtime(true);
 
         $host = 'http://localhost:4444/wd/hub';
         $capabilities = DesiredCapabilities::firefox();
         // включение "безголового" режима
-        $capabilities->setCapability('moz:firefoxOptions', ['args' => ['-headless']]);
+//        $capabilities->setCapability('moz:firefoxOptions', ['args' => ['-headless']]);
         $driver = RemoteWebDriver::create($host, $capabilities);
 
         $continueButtonClicks = $searchParams->getShowMoreClicks();
 
-        $driver->get('https://www.aviasales.ru/search/'.
+        $driver->
+        get(
+            'https://www.aviasales.ru/search/'.
             $searchParams->getDeparturePoint().
             $searchParams->getToDepartureDay().
             $searchParams->getToDepartureMonth().
@@ -79,30 +108,32 @@ class DataCollectorController extends AbstractController
             '?back=true'
         );
 
-        $driver->findElement(WebDriverBy::className('theme-switcher'))->click();
 
-        $driver->wait()->until(WebDriverExpectedCondition::not(WebDriverExpectedCondition::titleIs(
-            $searchParams->getToDepartureDay().
-            '.'.
-            $searchParams->getToDepartureMonth().
-            ', '.
-            $searchParams->getDeparturePoint().
-            ' → '.
-            $searchParams->getArrivalPoint()
-        )));
+//        $driver->findElement(WebDriverBy::className('theme-switcher'))->click();
+        // 9 622₽ | 29.07 - 05.08, MIL ⇄ LED
+        //TODO: для перелётов туда-обратно это не работает
+        //возвращает true как только ожидание заканчивается
 
-        $showMoreButton = $driver->findElement(WebDriverBy::cssSelector('div.show-more-products > button'));
+        $this->_waitUploadingPageEnd(
+            $driver,
+            $searchParams,
+            $this->_isRoundTrip($searchParams)
+        );
 
-        $continueButtonClicks = $this->showMoreResults(
+        $showMoreButton = $driver->
+        findElement(WebDriverBy::cssSelector('div.show-more-products > button'));
+
+        $continueButtonClicks = $this->_showMoreResults(
             $continueButtonClicks,
             $showMoreButton
         );
 
-        // проверка на совпадение количества элементов возвращаемых при поиске с количеством элементов загруженных в браузере
+        // проверка на совпадение количества элементов
+        // возвращаемых при поиске с количеством элементов загруженных в браузере
         $driver->wait()->until(
-            function () use ($driver, $continueButtonClicks)
-            {
-                $listElements = $driver->findElements(WebDriverBy::cssSelector('div.fade-enter-done'));
+            function () use ($driver, $continueButtonClicks) {
+                $listElements = $driver->
+                findElements(WebDriverBy::cssSelector('div.fade-enter-done'));
 
                 return count($listElements) >= ($continueButtonClicks + 1) * 10;
             },
@@ -112,10 +143,10 @@ class DataCollectorController extends AbstractController
         //sleep(5);
 
         // почему-то через этот класс у div всё работает
-        $listElements = $driver->findElements(WebDriverBy::cssSelector('div.fade-enter-done'));
+        $listElements = $driver->
+        findElements(WebDriverBy::cssSelector('div.fade-enter-done'));
 
-        foreach ($listElements as $element)
-        {
+        foreach ($listElements as $element) {
             $element->click();
         }
 
@@ -123,11 +154,12 @@ class DataCollectorController extends AbstractController
 
         $entityManager = $this->getDoctrine()->getManager();
 
-        for ($i = 1; $i < count($dataArray); $i++)
-        {
+        for ($i = 1; $i < count($dataArray); $i++) {
             $rawData = new RawData();
             try {
-                $akassaLink = $dataArray[$i]->findElement(WebDriverBy::partialLinkText('Aviakassa'))->getAttribute('href');
+                $akassaLink = $dataArray[$i]->
+                findElement(WebDriverBy::partialLinkText('Aviakassa'))
+                    ->getAttribute('href');
             }
             catch (Exception $ex) {
                 continue;
@@ -135,7 +167,11 @@ class DataCollectorController extends AbstractController
             // никто ничего не видит
             $rawData->setOfferText($dataArray[$i]->getText().$akassaLink);
             $rawData->setSearchParams($searchParams);
-            $rawData->setCreatedAt(DateTime::createFromFormat($this->datetimeFormat, date('Y-m-d H:i:s')));
+            $rawData->setCreatedAt(
+                DateTime::createFromFormat(
+                    $this->_datetimeFormat, date('Y-m-d H:i:s')
+                )
+            );
 
             $entityManager->persist($rawData);
             $entityManager->flush();
@@ -146,7 +182,8 @@ class DataCollectorController extends AbstractController
         $time_post = microtime(true);
 
         // указываем что данная запись уже проверенна
-        $searchParams->setIsChecked(true);
+        //TODO: расскоментить строку после тестов сборщика данных
+//        $searchParams->setIsChecked(true);
         $entityManager->persist($searchParams);
         $entityManager->flush();
 
@@ -154,17 +191,39 @@ class DataCollectorController extends AbstractController
     }
 
     /**
-     * Функция возвращает количество реально совершенных нажатий на кнопку "Показать еще 10 результатов"
-     * (необходимо в случае если в запросе указано больше кликов чем можно выполнить из-за недостаточного количества рейсов)
+     * Проверка является ли рейс перелётом туда-обратно
      *
-     * @param int $continueButtonClicks
-     * @param RemoteWebElement $driverItem
+     * @param SearchParams $searchParams объект SearchParams
+     *
+     * @return bool
+     */
+    private function _isRoundTrip(SearchParams $searchParams): bool
+    {
+        if ($searchParams->getFromDepartureMonth()
+            && $searchParams->getFromDepartureDay()
+        ) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Функция возвращает количество реально совершенных нажатий
+     * на кнопку "Показать еще 10 результатов"
+     * (необходимо в случае если в запросе указано больше кликов
+     * чем можно выполнить из-за недостаточного количества рейсов)
+     *
+     * @param int              $continueButtonClicks необходимое количество нажатий
+     * @param RemoteWebElement $driverItem           объект манипулирования
+     *                                               веб-драйвером
+     *
      * @return int
      */
-    private function showMoreResults(int $continueButtonClicks, RemoteWebElement $driverItem): int
-    {
-        for ($i = 0; $i < $continueButtonClicks; $i++)
-        {
+    private function _showMoreResults(
+        int $continueButtonClicks, RemoteWebElement $driverItem
+    ): int {
+        for ($i = 0; $i < $continueButtonClicks; $i++) {
             try {
                 $driverItem->click();
             }
@@ -173,5 +232,62 @@ class DataCollectorController extends AbstractController
             }
         }
         return $continueButtonClicks;
+    }
+
+    /**
+     * Ожидание полной загрузки страницы
+     *
+     * @param RemoteWebDriver $driver       объект для работы с веб-драйвером
+     * @param SearchParams    $searchParams объект с данными запроса
+     * @param bool            $isRoundTrip  проверка типа рейса
+     *
+     * @return bool
+     *
+     * @throws \Facebook\WebDriver\Exception\NoSuchElementException
+     * @throws \Facebook\WebDriver\Exception\TimeoutException
+     * @throws Exception
+     */
+    private function _waitUploadingPageEnd(
+        RemoteWebDriver $driver,
+        SearchParams $searchParams,
+        bool $isRoundTrip
+    ): bool {
+        if ($isRoundTrip) {
+            // 9 622₽ | 29.07 - 05.08, MIL ⇄ LED
+            return $driver->wait()
+                ->until(
+                    WebDriverExpectedCondition::not(
+                        WebDriverExpectedCondition::titleIs(
+                            $searchParams->getToDepartureDay().
+                            '.'.
+                            $searchParams->getToDepartureMonth().
+                            ' - '.
+                            $searchParams->getFromDepartureDay().
+                            '.'.
+                            $searchParams->getFromDepartureMonth().
+                            ', '.
+                            $searchParams->getDeparturePoint().
+                            ' ⇄ '.
+                            $searchParams->getArrivalPoint()
+                        )
+                    )
+                );
+        } else {
+            return $driver->wait()
+                ->until(
+                    WebDriverExpectedCondition::not(
+                        WebDriverExpectedCondition::titleIs(
+                            $searchParams->getToDepartureDay().
+                            '.'.
+                            $searchParams->getToDepartureMonth().
+                            ', '.
+                            $searchParams->getDeparturePoint().
+                            ' → '.
+                            $searchParams->getArrivalPoint()
+                        )
+                    )
+                );
+        }
+        throw new Exception('Невозможно определить тип рейса!');
     }
 }

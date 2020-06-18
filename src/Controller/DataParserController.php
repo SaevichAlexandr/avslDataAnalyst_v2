@@ -6,21 +6,24 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
-use App\Entity\SearchParams;
 use App\Entity\RawData;
 use App\Entity\OfferData;
+use App\Entity\SuppliersPrice;
+use App\Entity\Supplier;
 use DateTime;
 use Exception;
 use App\CustomException\StringNotFoundException;
 
 class DataParserController extends AbstractController
 {
-    private $datetimeFormat = 'Y-m-d H:i:s';
+    private $_datetimeFormat = 'Y-m-d H:i:s';
 
     /**
-     * Старт парсинга
+     * Входной метод
      *
      * @return Response
+     *
+     * @throws Exception
      */
     public function parsingQueueOrganizer()
     {
@@ -30,42 +33,61 @@ class DataParserController extends AbstractController
         $repository = $this->getDoctrine()->getRepository(RawData::class);
         $rawDataList = $repository->findBy(['isParsed' => false]);
 
-        if($rawDataList) {
+        if ($rawDataList) {
             $completeList = [];
             foreach ($rawDataList as $rawData) {
                 // TODO: сюда вставить ызов функции парсинга
-                $errorCode = $this->parseData($rawData);
-//                $rawData->setIsParsed(true);
+                try {
+                    $completeList[] = $this->_parseData($rawData)->getId();
+                }
+                catch (Exception $ex)
+                {
+                    $response->setContent(json_encode($ex));
+                    return $response;
+                }
+
             }
-            return $response->setContent(json_encode($completeList));
-        }
-        else {
-            return $response->setContent('There are no unchecked searchParams');
+            $response->setContent(json_encode($completeList));
+            return $response;
+        } else {
+            $response->setContent('There are no unchecked searchParams');
+            return $response;
         }
     }
 
     /**
      * Разбиение строки на части
      *
-     * @param RawData $rawData
-     * @return int
+     * @param RawData $rawData строка с сырыми данными
+     *
+     * @return OfferData
+     *
      * @throws Exception
      */
-    private function parseData(RawData $rawData): int
+    private function _parseData(RawData $rawData): OfferData
     {
-        // внесение данных в таблицу OfferData
+        //TODO: в этом методе надо будет возвращать скпомпонованный
+        // объект (или json) с предложением, ценами и перелётами
         $splitResult = preg_split('/\r\n|\r|\n/', $rawData->getOfferText());
-        echo 'ID = '.$rawData->getId();
         $offerData = new OfferData();
         $offerData->setRawData($rawData);
+        try {
+            $offerData = $this->_setOfferData($splitResult, $offerData);
+            $offerDataId = $offerData->getId();
+//            $suppliersPrice = $this->_suppliersPricesHandler($splitResult, $offerDataId);
+        }
+        catch (Exception $ex) {
+//            throw new Exception($ex->getMessage().'rawDataId: '.$rawData->getId());
+            throw $ex;
+        }
 
-        $this->_parseOfferData($splitResult, $offerData);
+        $entityManager = $this->getDoctrine()->getManager();
+        $entityManager->persist($offerData);
+        $entityManager->flush();
 
-
-        // TODO: весь сбор инфы по OfferData отсюда нужно перенести в функцию parseOfferInfo
-
-
-        return 200;
+        //TODO: весь сбор инфы по OfferData отсюда
+        // нужно перенести в функцию parseOfferInfo
+        return $offerData;
     }
 
     /**
@@ -80,67 +102,117 @@ class DataParserController extends AbstractController
      *
      * @throws Exception
      */
-    private function _parseOfferData(
+    private function _setOfferData(
         array $splitResult,
         OfferData $offerData
     ): OfferData {
         try {
-            $baggage = $this->_parseBaggage($splitResult[0]);
-            echo 'Baggage = ' . $baggage . '<br>';
+            $offerData->setBaggage($this->_parseBaggage($splitResult[0]));
             $buyForIndex = $this->_buyFor($splitResult);
-            echo 'BuyForIndex = ' . $buyForIndex . '<br>';
             $buttonPrice = $this->_parseButtonPrice($splitResult, $buyForIndex);
-            echo 'ButtonPrice = ' . $buttonPrice . '<br>';
+            $offerData->setButtonPrice($buttonPrice);
             $suppliersPrices = $this->_parseSuppliersPrices(
                 $splitResult,
                 $buyForIndex,
                 $buttonPrice
             );
-            var_dump($suppliersPrices);
-            $akassaPrice = $this->_findAkassaPrice($suppliersPrices);
-            echo 'AkassaPrice = '.$akassaPrice.'<br>';
-            $akassaHref = $splitResult[(count($splitResult) - 1)];
-            echo 'AkassaHref = ' . $akassaHref . '<br>';
-
+            $offerData->setAkassaPrice($this->_findAkassaPrice($suppliersPrices));
+            $offerData->setAkassaHref(
+                $this->_parseAkassaHref($splitResult[(count($splitResult) - 1)])
+            );
             for ($i = 0; $i < count($splitResult); $i++) {
                 if (preg_match('([0-9][0-9]:[0-9][0-9])', $splitResult[$i])) {
                     $currentElement = $i;
-                    $departurePoint = $splitResult[($currentElement + 4)];
-                    echo 'DeparturePoint = '.$departurePoint.'<br>';
-                    $arrivalPoint = $splitResult[($currentElement + 5)];
-                    echo 'ArrivalPoint = '.$arrivalPoint.'<br>';
-                    // пересадки может и не быть, йобана
-                    $transferTime = $this->_parseTransferTime(
-                        $splitResult[($currentElement + 3)]
+                    $offerData->setDeparturePoint(
+                        $splitResult[($currentElement + 4)]
                     );
-                    echo 'TransferTime = '.$transferTime.'<br>';
-
+                    $offerData->setArrivalPoint(
+                        $splitResult[($currentElement + 5)]
+                    );
+                    $offerData->setTransferTime(
+                        $this->_parseTransferTime(
+                            $splitResult[($currentElement + 3)]
+                        )
+                    );
                     $departureTime = $splitResult[$currentElement];
                     $departureDate = $splitResult[($currentElement + 2)];
                     $arrivalTime = $splitResult[($currentElement + 6)];
                     $arrivalDate = $splitResult[($currentElement + 8)];
-
-                    $departureDatetime = $this->_parseOfferDate(
-                        $departureDate,
-                        $departureTime
+                    $offerData->setDepartureDatetime(
+                        $this->_parseOfferDate(
+                            $departureDate,
+                            $departureTime
+                        )
                     );
-                    var_dump($departureDatetime);
-                    $arrivalDatetime = $this->_parseOfferDate(
-                        $arrivalDate,
-                        $arrivalTime
+                    $offerData->setArrivalDatetime(
+                        $this->_parseOfferDate(
+                            $arrivalDate,
+                            $arrivalTime
+                        )
                     );
-                    var_dump($arrivalDatetime);
-                    $createdAt = DateTime::createFromFormat(
-                        $this->datetimeFormat, date('Y-m-d H:i:s')
+                    $offerData->setCreatedAt(
+                        DateTime::createFromFormat(
+                            $this->_datetimeFormat, date('Y-m-d H:i:s')
+                        )
                     );
-                    echo '=====================================================<br>';
-                    break;
+                    return $offerData;
                 }
             }
         }
         catch (Exception $ex) {
             throw $ex;
         }
+        throw new Exception(
+            'Произошла непредвиденная ошибка при заполнении объекта OfferData'
+        );
+    }
+
+    private function _suppliersPricesHandler(
+        array $splitResult,
+        int $offerDataId
+    ): array {
+        try {
+            $buyForIndex = $this->_buyFor($splitResult);
+            $buttonPrice = $this->_parseButtonPrice($splitResult, $buyForIndex);
+            $suppliersPrices = $this->_parseSuppliersPrices(
+                $splitResult,
+                $buyForIndex,
+                $buttonPrice
+            );
+            foreach ($suppliersPrices as $suppliersPrice) {
+                $this->_setSuppliersPrice();
+            }
+        }
+        catch (Exception $ex) {
+            throw $ex;
+        }
+        throw new Exception(
+            'При записи цен поставщиков произошла непредвиденная ошибка'
+        );
+    }
+
+    //TODO: хорошая мысль всё-таки сделать кастомные классы ошибок
+    // чтобы в них передавать id ресурса, на котором произошёл ахтунг
+
+    private function _setSuppliersPrice(array $supplierPrice): SuppliersPrice
+    {
+
+    }
+
+    /**
+     * Возвращает очищенную ссылку
+     *
+     * @param string $rawHref необработанная ссылка
+     *
+     * @return string
+     */
+    private function _parseAkassaHref(string $rawHref): string
+    {
+        return preg_replace(
+            '/^([^=]+)=/',
+            '',
+            $rawHref
+        );
     }
 
     /**
@@ -172,14 +244,12 @@ class DataParserController extends AbstractController
      */
     private function _parseButtonPrice(array $splitResult, int $buyForIndex): float
     {
-        // TODO: стоит подумать, может всю работу с поставщиками можно в одном цикле сделать
         // тут в разделителе нормальный пробел код &#32;
         $buttonPrice = explode(' ', $splitResult[++$buyForIndex])[1];
-        // тут в разделителе пробел, но не совсем (Thin space) код &#8201;, крч лучше не трогать пока работает
+        // тут в разделителе пробел, но не совсем (Thin space) код &#8201;,
         $buttonPrice = explode(' ', $buttonPrice);
         $buttonPrice = $buttonPrice[0].$buttonPrice[1];
         $buttonPrice = floatval($buttonPrice);
-
         return $buttonPrice;
     }
 
@@ -234,6 +304,7 @@ class DataParserController extends AbstractController
             if (!preg_match('([0-9][0-9]:[0-9][0-9])', $splitResult[$i])
                 && $splitResult[$i] != 'ЧАРТЕР'
                 && $splitResult[$i] != 'ЛОУКОСТ'
+                && !preg_match('(ТУДА.*)', $splitResult[$i])
             ) {
                 $supplierName = $splitResult[$i];
                 $supplierPrice = explode(' ', $splitResult[++$i]);
@@ -254,11 +325,11 @@ class DataParserController extends AbstractController
      * 
      * @param string $rawBaggage строка с необработанной информацией о багаже
      * 
-     * @return bool
+     * @return string
      * 
      * @throws Exception
      */
-    private function _parseBaggage(string $rawBaggage): bool
+    private function _parseBaggage(string $rawBaggage): string
     {
         switch ($rawBaggage) {
             case 'Нет багажа':
@@ -312,7 +383,7 @@ class DataParserController extends AbstractController
             $year = str_replace(',',  '', $rawDateArray[2]);
 
             return DateTime::createFromFormat(
-                $this->datetimeFormat,
+                $this->_datetimeFormat,
                 $year.'-'.$month.'-'.$day.' '.$rawTime.':00'
             );
         }

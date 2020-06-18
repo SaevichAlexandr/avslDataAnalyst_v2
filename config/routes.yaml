@@ -2,40 +2,41 @@
 #    path: /
 #    controller: App\Controller\DefaultController::index
 GatherData:
-  path:       /gather/run
+  path:       /gather
   controller: App\Controller\DataCollectorController::gatherQueueOrganizer
   methods:    GET
 
+ParseData:
+  path:       /parse
+  controller: App\Controller\DataParserController::parsingQueueOrganizer
+  methods:    GET
+
 GetSearchParams:
-  path:       /search_params/get/{id}
+  path:       /search_params/{id}
   controller: App\Controller\SearchParamsController::getSearchParams
   methods:    GET
 
 GetSearchParamsAll:
-  path:       /search_params/get_all
+  path:       /search_params
   controller: App\Controller\SearchParamsController::getAll
   methods:    GET
 
 CreateSearchParams:
-  path:       /search_params/create
+  path:       /search_params
   controller: App\Controller\SearchParamsController::create
   methods:    POST
 
 UpdateSearchParams:
-  path:       /search_params/update/{id}
+  path:       /search_params/{id}
   controller: App\Controller\SearchParamsController::update
-  methods:    POST
+  methods:    PUT
   requirements:
     id: '\d+'
 
 DeleteSearchParams:
-  path:       /search_params/delete/{id}
+  path:       /search_params/{id}
   controller: App\Controller\SearchParamsController::delete
-  methods:    GET
+  methods:    DELETE
   requirements:
     id: '\d+'
 
-ParseData:
-  path:       /parse/run
-  controller: App\Controller\DataParserController::parsingQueueOrganizer
-  methods:    GET
