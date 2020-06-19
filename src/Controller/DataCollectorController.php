@@ -108,12 +108,6 @@ class DataCollectorController extends AbstractController
             '?back=true'
         );
 
-
-//        $driver->findElement(WebDriverBy::className('theme-switcher'))->click();
-        // 9 622₽ | 29.07 - 05.08, MIL ⇄ LED
-        //TODO: для перелётов туда-обратно это не работает
-        //возвращает true как только ожидание заканчивается
-
         $this->_waitUploadingPageEnd(
             $driver,
             $searchParams,
@@ -253,7 +247,6 @@ class DataCollectorController extends AbstractController
         bool $isRoundTrip
     ): bool {
         if ($isRoundTrip) {
-            // 9 622₽ | 29.07 - 05.08, MIL ⇄ LED
             return $driver->wait()
                 ->until(
                     WebDriverExpectedCondition::not(
@@ -288,6 +281,5 @@ class DataCollectorController extends AbstractController
                     )
                 );
         }
-        throw new Exception('Невозможно определить тип рейса!');
     }
 }

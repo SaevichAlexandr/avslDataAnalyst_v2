@@ -2,6 +2,8 @@
 
 namespace App\Controller;
 
+use Doctrine\ORM\EntityManager;
+use Doctrine\ORM\Mapping\Entity;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Routing\Annotation\Route;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,7 +22,6 @@ class SearchParamsController extends AbstractController
         $response->headers->set('Content-type', 'application/json');
         $repository = $this->getDoctrine()->getRepository(SearchParams::class);
         $searchParams = $repository->find($id);
-
         if($searchParams) {
             $response->setContent(json_encode(
                 [
@@ -284,5 +285,10 @@ class SearchParamsController extends AbstractController
             return 502;
         }
         return 501;
+    }
+
+    public function isTrue(bool $ex): bool
+    {
+        return $ex;
     }
 }
