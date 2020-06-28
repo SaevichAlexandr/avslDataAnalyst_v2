@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use Doctrine\DBAL\Driver\OCI8\Driver;
 use Facebook\WebDriver\WebDriverBy;
 use Facebook\WebDriver\WebDriverExpectedCondition;
 use Symfony\Component\HttpFoundation\Request;
@@ -41,8 +42,7 @@ class DataCollectorController extends AbstractController
      *
      * @return Response
      *
-     * @throws \Facebook\WebDriver\Exception\NoSuchElementException
-     * @throws \Facebook\WebDriver\Exception\TimeoutException
+     * @throws Exception
      */
     public function gatherQueueOrganizer()
     {
@@ -52,15 +52,30 @@ class DataCollectorController extends AbstractController
         $repository = $this->getDoctrine()->getRepository(SearchParams::class);
         $searchParamsList = $repository->findBy(['isChecked' => false]);
 
+        $host = 'http://localhost:4444/wd/hub';
+        $capabilities = DesiredCapabilities::firefox();
+        // включение "безголового" режима
+//        $capabilities->setCapability('moz:firefoxOptions', ['args' => ['-headless']]);
+
         if ($searchParamsList) {
             $completeList = [];
             foreach ($searchParamsList as $searchParams) {
                 set_time_limit(100 * $searchParams->getShowMoreClicks());
-                $timeToComplete = $this->_gatherData($searchParams);
-                $completeList[] = [
-                    'searchParamsId' => $searchParams->getId(),
-                    'timeToComplete' => $timeToComplete
-                ];
+                try {
+                    $driver = RemoteWebDriver::create($host, $capabilities);
+                    $timeToComplete = $this->_gatherData($searchParams, $driver);
+                    $completeList[] = [
+                        'searchParamsId' => $searchParams->getId(),
+                        'timeToComplete' => $timeToComplete
+                    ];
+                    $driver->quit();
+                } catch (Exception $ex) {
+                    $completeList[] = "There is exception on search request: ".
+                        $searchParams->getId().
+                        ". Request must be updated or deleted.";
+                    $driver->quit();
+                    continue;
+                }
             }
             return $response->setContent(json_encode($completeList));
         } else {
@@ -73,22 +88,17 @@ class DataCollectorController extends AbstractController
     /**
      * Основной метод где происходит сбор данных
      *
-     * @param SearchParams $searchParams объект $searchParams
+     * @param SearchParams    $searchParams объект $searchParams
+     * @param RemoteWebDriver $driver       объект драйвера для работы с браузером
      *
      * @return float|string
      *
      * @throws \Facebook\WebDriver\Exception\NoSuchElementException
      * @throws \Facebook\WebDriver\Exception\TimeoutException
      */
-    private function _gatherData(SearchParams $searchParams)
+    private function _gatherData(SearchParams $searchParams, RemoteWebDriver $driver)
     {
         $time_pre = microtime(true);
-
-        $host = 'http://localhost:4444/wd/hub';
-        $capabilities = DesiredCapabilities::firefox();
-        // включение "безголового" режима
-//        $capabilities->setCapability('moz:firefoxOptions', ['args' => ['-headless']]);
-        $driver = RemoteWebDriver::create($host, $capabilities);
 
         $continueButtonClicks = $searchParams->getShowMoreClicks();
 
@@ -110,12 +120,11 @@ class DataCollectorController extends AbstractController
 
         $driver->findElement(WebDriverBy::cssSelector('.navbar__control label'))
             ->click();
-
-        $this->_waitUploadingPageEnd(
-            $driver,
-            $searchParams,
-            $this->_isRoundTrip($searchParams)
-        );
+            $this->_waitUploadingPageEnd(
+                $driver,
+                $searchParams,
+                $this->_isRoundTrip($searchParams)
+            );
 
         $showMoreButton = $driver->
         findElement(WebDriverBy::cssSelector('div.show-more-products > button'));
