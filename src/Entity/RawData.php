@@ -74,7 +74,7 @@ class RawData
 
     public function getIsParsed()
     {
-        $this->isParsed;
+        return $this->isParsed;
     }
 
     public function setIsParsed(bool $isParsed): self

@@ -40,3 +40,22 @@ DeleteSearchParams:
   requirements:
     id: '\d+'
 
+GetRawData:
+  path:       /raw_data/{id}
+  controller: App\Controller\RawDataController::getRawData
+  methods:    GET
+
+GetRawDataAll:
+  path:       /raw_data
+  controller: App\Controller\RawDataController::getAll
+  methods:    GET
+
+GetOfferData:
+  path:       /offer_data/{id}
+  controller: App\Controller\OfferDataController::getOfferData
+  methods:    GET
+
+GetOfferDataAll:
+  path:       /offer_data
+  controller: App\Controller\OfferDataController::getAll
+  methods:    GET

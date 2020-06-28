@@ -108,6 +108,9 @@ class DataCollectorController extends AbstractController
             '?back=true'
         );
 
+        $driver->findElement(WebDriverBy::cssSelector('.navbar__control label'))
+            ->click();
+
         $this->_waitUploadingPageEnd(
             $driver,
             $searchParams,
@@ -122,6 +125,7 @@ class DataCollectorController extends AbstractController
             $showMoreButton
         );
 
+        sleep(5);
         // проверка на совпадение количества элементов
         // возвращаемых при поиске с количеством элементов загруженных в браузере
         $driver->wait()->until(
@@ -171,13 +175,14 @@ class DataCollectorController extends AbstractController
             $entityManager->flush();
         }
 
-        $driver->quit();
+        //TODO: расскоментить после всех очных проверок
+//        $driver->quit();
 
         $time_post = microtime(true);
 
         // указываем что данная запись уже проверенна
         //TODO: расскоментить строку после тестов сборщика данных
-//        $searchParams->setIsChecked(true);
+        $searchParams->setIsChecked(true);
         $entityManager->persist($searchParams);
         $entityManager->flush();
 

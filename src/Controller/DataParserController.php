@@ -12,7 +12,7 @@ use App\Entity\SuppliersPrice;
 use App\Entity\Supplier;
 use DateTime;
 use Exception;
-use App\CustomException\StringNotFoundException;
+
 
 class DataParserController extends AbstractController
 {
@@ -83,6 +83,10 @@ class DataParserController extends AbstractController
 
         $entityManager = $this->getDoctrine()->getManager();
         $entityManager->persist($offerData);
+        $entityManager->flush();
+
+        $rawData->setIsParsed(true);
+        $entityManager->persist($rawData);
         $entityManager->flush();
 
         //TODO: весь сбор инфы по OfferData отсюда
