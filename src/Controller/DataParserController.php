@@ -50,7 +50,7 @@ class DataParserController extends AbstractController
             $response->setContent(json_encode($completeList));
             return $response;
         } else {
-            $response->setContent('There are no unchecked searchParams');
+            $response->setContent('There are no unchecked rawData');
             return $response;
         }
     }
@@ -73,17 +73,22 @@ class DataParserController extends AbstractController
         $offerData->setRawData($rawData);
         try {
             $offerData = $this->_setOfferData($splitResult, $offerData);
-            $offerDataId = $offerData->getId();
-//            $suppliersPrice = $this->_suppliersPricesHandler($splitResult, $offerDataId);
+//            $offerDataId = $offerData->getId();
+
+            $entityManager = $this->getDoctrine()->getManager();
+            $entityManager->persist($offerData);
+            $entityManager->flush();
+
+            $this->_suppliersPricesHandler(
+                $splitResult, $offerData
+            );
         }
         catch (Exception $ex) {
 //            throw new Exception($ex->getMessage().'rawDataId: '.$rawData->getId());
             throw $ex;
         }
 
-        $entityManager = $this->getDoctrine()->getManager();
-        $entityManager->persist($offerData);
-        $entityManager->flush();
+
 
         $rawData->setIsParsed(true);
         $entityManager->persist($rawData);
@@ -173,8 +178,8 @@ class DataParserController extends AbstractController
 
     private function _suppliersPricesHandler(
         array $splitResult,
-        int $offerDataId
-    ): array {
+        OfferData $offerData
+    ): void {
         try {
             $buyForIndex = $this->_buyFor($splitResult);
             $buttonPrice = $this->_parseButtonPrice($splitResult, $buyForIndex);
@@ -184,23 +189,51 @@ class DataParserController extends AbstractController
                 $buttonPrice
             );
             foreach ($suppliersPrices as $suppliersPrice) {
-                $this->_setSuppliersPrice();
+                $this->_setSuppliersPrice($suppliersPrice, $offerData);
             }
         }
         catch (Exception $ex) {
             throw $ex;
         }
-        throw new Exception(
-            'При записи цен поставщиков произошла непредвиденная ошибка'
-        );
+        return;
     }
 
     //TODO: хорошая мысль всё-таки сделать кастомные классы ошибок
     // чтобы в них передавать id ресурса, на котором произошёл ахтунг
 
-    private function _setSuppliersPrice(array $supplierPrice): SuppliersPrice
-    {
+    /**
+     * Метод записывает данные в таблицу с ценой каждого поставщика
+     *
+     * @param array     $supplierPrice массив хранящий название поставщика и его цену
+     * @param OfferData $offerData     объект OfferData
+     *
+     * @return SuppliersPrice
+     */
+    private function _setSuppliersPrice(
+        array $supplierPrice,
+        OfferData $offerData
+    ): SuppliersPrice {
+        $repository = $this->getDoctrine()->getRepository(Supplier::class);
+        $entityManager = $this->getDoctrine()->getManager();
 
+        $supplier = $repository->findOneBy(
+            ['name' => $supplierPrice['supplierName']]
+        );
+        if (!is_object($supplier)) {
+            $supplier = new Supplier();
+            $supplier->setName($supplierPrice['supplierName']);
+
+            $entityManager->persist($supplier);
+            $entityManager->flush();
+        }
+        $suppliersPrice = new SuppliersPrice($supplier, $offerData);
+        $suppliersPrice->setPrice($supplierPrice['supplierPrice']);
+
+        $entityManager->persist($suppliersPrice);
+        $entityManager->flush();
+
+
+        return $suppliersPrice;
     }
 
     /**

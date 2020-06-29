@@ -204,7 +204,7 @@ class SearchParamsController extends AbstractController
      * @param bool $createAction
      * @return SearchParams
      */
-    private function setData(SearchParams $searchParams, array $reqBody, bool $createAction): SearchParams
+    private function setData(SearchParams $searchParams, array $reqBody, bool $isCreateRequest): SearchParams
     {
         $searchParams->setDeparturePoint($reqBody['departurePoint']);
         $searchParams->setArrivalPoint($reqBody['arrivalPoint']);
@@ -217,7 +217,7 @@ class SearchParamsController extends AbstractController
         $searchParams->setChildren($reqBody['children']);
         $searchParams->setInfants($reqBody['infants']);
         $searchParams->setShowMoreClicks($reqBody['showMoreClicks']);
-        if($createAction) {
+        if($isCreateRequest) {
             $searchParams->setCreatedAt(DateTime::createFromFormat($this->_datetimeFormat, date('Y-m-d H:i:s')));
         }
 
@@ -465,9 +465,9 @@ class SearchParamsController extends AbstractController
             );
         }
 
-        if (($reqBody['adults'] <= $reqBody['infants'])
+        if (($reqBody['adults'] < $reqBody['infants'])
             || (($reqBody['adults'] + $reqBody['children'] + $reqBody['infants'])
-                >= $this->_maxPassengersNumber)
+                > $this->_maxPassengersNumber)
         ) {
             throw new Exception('Wrong number of passengers');
         }

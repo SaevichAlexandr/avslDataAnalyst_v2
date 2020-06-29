@@ -59,3 +59,13 @@ GetOfferDataAll:
   path:       /offer_data
   controller: App\Controller\OfferDataController::getAll
   methods:    GET
+
+GetFullOfferInfo:
+  path:       /result_data/{id}
+  controller: App\Controller\ResultDataController::getFullOfferInfo
+  methods:    GET
+
+GetFullOfferInfoAll:
+  path:       /result_data
+  controller: App\Controller\ResultDataController::getFullOfferInfoAll
+  methods:    GET

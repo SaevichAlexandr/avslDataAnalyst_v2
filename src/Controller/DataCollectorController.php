@@ -70,7 +70,8 @@ class DataCollectorController extends AbstractController
                     ];
                     $driver->quit();
                 } catch (Exception $ex) {
-                    $completeList[] = "There is exception on search request: ".
+                    $completeList[] = $ex->getMessage().
+                        "There is exception on search request: ".
                         $searchParams->getId().
                         ". Request must be updated or deleted.";
                     $driver->quit();
@@ -260,6 +261,7 @@ class DataCollectorController extends AbstractController
         SearchParams $searchParams,
         bool $isRoundTrip
     ): bool {
+//        sleep(10);
         if ($isRoundTrip) {
             return $driver->wait()
                 ->until(
