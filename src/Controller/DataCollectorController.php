@@ -121,11 +121,11 @@ class DataCollectorController extends AbstractController
 
         $driver->findElement(WebDriverBy::cssSelector('.navbar__control label'))
             ->click();
-            $this->_waitUploadingPageEnd(
-                $driver,
-                $searchParams,
-                $this->_isRoundTrip($searchParams)
-            );
+        $this->_waitUploadingPageEnd(
+            $driver,
+            $searchParams,
+            $this->_isRoundTrip($searchParams)
+        );
 
         $showMoreButton = $driver->
         findElement(WebDriverBy::cssSelector('div.show-more-products > button'));

@@ -373,6 +373,8 @@ class DataParserController extends AbstractController
                 return '0PC';
             case 'С багажом':
                 return '1PC';
+            case 'Багаж неизвестен':
+                return 'N/A';
         }
         throw new Exception('Невозможно определить наличие багажа!');
     }
